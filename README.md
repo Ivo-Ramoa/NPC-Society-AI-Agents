@@ -75,6 +75,8 @@ The objective is to simulate a small artificial society where behaviours such as
 
 The Unity environment uses third-party visual assets and animations. These assets are not authored by the project developers and are not included in this public repository. They remain subject to their respective licenses.
 
+The demo GIF and video show the complete original project environment, while the raw third-party asset files have been excluded from this public portfolio version.
+
 ## Authors
 
 - Ivo Ramoa
