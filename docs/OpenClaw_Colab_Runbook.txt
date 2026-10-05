@@ -1,0 +1,393 @@
+﻿# OpenClaw + Colab Runbook
+
+Este ficheiro documenta a forma correta de arrancar a demo NPC Society com OpenClaw, Unity, Colab, Cloudflare Tunnel e proxy local.
+
+Objetivo:
+- Evitar depender de memoria ou instrucoes incompletas.
+- Reproduzir a demo funcional depois de o Colab reiniciar.
+- Garantir que o OpenClaw consegue chegar ao Ollama atraves de http://127.0.0.1:11434.
+
+Modelo validado:
+qwen3:4b-instruct
+
+Nao instalar qwen2.5 apenas porque apareceu em algum log antigo/default. O projeto foi validado com qwen3:4b-instruct.
+
+Cadeia correta:
+Unity
+-> Flask Bridge local: http://127.0.0.1:5055
+-> OpenClaw Gateway local: http://127.0.0.1:18789
+-> Proxy local no PC: http://127.0.0.1:11434
+-> Cloudflare Tunnel
+-> Ollama no Colab
+-> qwen3:4b-instruct
+
+Importante:
+127.0.0.1 no Colab nao e o mesmo 127.0.0.1 do PC.
+O OpenClaw corre no PC, por isso precisa de encontrar algo em http://127.0.0.1:11434 no PC.
+Esse "algo" deve ser o proxy local que encaminha para o URL Cloudflare do Colab.
+
+============================================================
+1. Colab - confirmar GPU
+============================================================
+
+Executar no Colab:
+
+!nvidia-smi
+
+Resultado esperado:
+Tesla T4
+
+Se nao aparecer GPU:
+Tempo de execucao -> Alterar tipo de tempo de execucao -> T4 GPU -> Guardar
+
+============================================================
+2. Colab - instalar Ollama e cloudflared se necessario
+============================================================
+
+Executar no Colab:
+
+!apt-get update -qq
+!apt-get install -y zstd curl wget
+!curl -fsSL https://ollama.com/install.sh | sh
+!wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
+!chmod +x cloudflared
+!ollama --version
+!./cloudflared --version
+
+Avisos normais no Colab:
+- systemd is not running
+- Unable to detect NVIDIA/AMD GPU
+
+Estes avisos nao significam necessariamente falha.
+
+Se aparecer:
+cloudflared: Text file busy
+
+Significa que o binario cloudflared ainda esta em execucao. Resolver com:
+
+%%bash
+set +e
+pkill -9 -f cloudflared || true
+sleep 2
+chmod +x ./cloudflared
+./cloudflared --version
+
+============================================================
+3. Colab - arrancar Ollama
+============================================================
+
+Executar no Colab:
+
+%%bash
+set -e
+
+pkill ollama || true
+sleep 2
+
+export OLLAMA_HOST=0.0.0.0:11434
+export OLLAMA_KV_CACHE_TYPE=q8_0
+export OLLAMA_NUM_PARALLEL=1
+export OLLAMA_MAX_LOADED_MODELS=1
+export OLLAMA_KEEP_ALIVE=30m
+export OLLAMA_CONTEXT_LENGTH=4096
+export OLLAMA_DEBUG=1
+
+nohup ollama serve > ollama_colab.log 2>&1 &
+
+sleep 5
+
+curl -s http://127.0.0.1:11434/api/tags
+
+============================================================
+4. Colab - garantir modelo
+============================================================
+
+Executar no Colab:
+
+!ollama pull qwen3:4b-instruct
+
+Aquecer e confirmar GPU/contexto:
+
+%%bash
+ollama run qwen3:4b-instruct "Responde apenas: OK"
+
+echo ""
+echo "=== Loaded models ==="
+ollama ps
+
+Resultado esperado:
+- resposta OK
+- qwen3:4b-instruct
+- 100% GPU
+- CONTEXT 4096
+
+============================================================
+5. Colab - criar Cloudflare Tunnel
+============================================================
+
+Executar no Colab:
+
+%%bash
+set +e
+
+pkill -9 -f cloudflared || true
+sleep 2
+
+rm -f cloudflared.log
+
+nohup ./cloudflared tunnel \
+    --url http://127.0.0.1:11434 \
+    --no-autoupdate \
+    > cloudflared.log 2>&1 &
+
+echo "Waiting for Cloudflare tunnel URL..."
+
+for i in $(seq 1 30); do
+    URL=$(grep -Eo 'https://[-a-zA-Z0-9]+\.trycloudflare\.com' cloudflared.log | head -n 1)
+    if [ -n "$URL" ]; then
+        echo "CLOUDFLARE_URL=$URL"
+        exit 0
+    fi
+    sleep 1
+done
+
+echo "No URL found yet."
+cat cloudflared.log
+exit 1
+
+Copiar o URL gerado.
+Exemplo:
+https://mental-cdna-judy-rate.trycloudflare.com
+
+A celula terminar depois de mostrar CLOUDFLARE_URL e normal. O processo cloudflared fica em background.
+
+Confirmar processos no Colab:
+
+%%bash
+echo "=== cloudflared process ==="
+pgrep -af cloudflared || echo "cloudflared not running"
+
+echo ""
+echo "=== ollama process ==="
+pgrep -af ollama || echo "ollama not running"
+
+echo ""
+echo "=== local Ollama tags ==="
+curl -s http://127.0.0.1:11434/api/tags
+
+============================================================
+6. PC - parar portas antes de arrancar
+============================================================
+
+Executar no PowerShell, na raiz do projeto:
+
+cd "C:\Uni\3º ano\2ºSemestre\AO\TP4\2026-ei-aoopii-a18-clean"
+
+openclaw gateway stop
+
+Get-NetTCPConnection -LocalPort 18789 -ErrorAction SilentlyContinue |
+    Select-Object -ExpandProperty OwningProcess |
+    ForEach-Object { Stop-Process -Id $_ -Force }
+
+Get-NetTCPConnection -LocalPort 5055 -ErrorAction SilentlyContinue |
+    Select-Object -ExpandProperty OwningProcess |
+    ForEach-Object { Stop-Process -Id $_ -Force }
+
+Get-NetTCPConnection -LocalPort 11434 -ErrorAction SilentlyContinue |
+    Select-Object -ExpandProperty OwningProcess |
+    ForEach-Object { Stop-Process -Id $_ -Force }
+
+Confirmar que as portas estao livres:
+
+Write-Host "=== 11434 ==="
+Get-NetTCPConnection -LocalPort 11434 -State Listen -ErrorAction SilentlyContinue
+
+Write-Host "=== 18789 ==="
+Get-NetTCPConnection -LocalPort 18789 -State Listen -ErrorAction SilentlyContinue
+
+Write-Host "=== 5055 ==="
+Get-NetTCPConnection -LocalPort 5055 -State Listen -ErrorAction SilentlyContinue
+
+Se nao aparecer nada, esta correto.
+
+============================================================
+7. PC - arrancar proxy local para Colab
+============================================================
+
+Terminal PC 1:
+
+cd "C:\Uni\3º ano\2ºSemestre\AO\TP4\2026-ei-aoopii-a18-clean"
+
+$env:COLAB_OLLAMA_URL = "https://COLOCAR_AQUI_O_URL.trycloudflare.com"
+
+python .\colab_ollama_proxy.py
+
+Este terminal deve ficar aberto.
+
+Resultado esperado:
+Forwarding local Ollama API to: https://...
+Running on http://127.0.0.1:11434
+
+============================================================
+8. PC - testar proxy local
+============================================================
+
+Terminal PC 2:
+
+Invoke-RestMethod http://127.0.0.1:11434/api/tags |
+    ConvertTo-Json -Depth 6
+
+Depois:
+
+$body = @{
+    model = "qwen3:4b-instruct"
+    prompt = "Responde apenas: OK"
+    stream = $false
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+    -Uri "http://127.0.0.1:11434/api/generate" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body |
+    ConvertTo-Json -Depth 6
+
+Resultado esperado:
+"response": "OK"
+
+Se isto nao funcionar, nao abrir Unity.
+O problema esta entre:
+PC proxy 11434 -> Cloudflare -> Ollama Colab
+
+============================================================
+9. PC - arrancar OpenClaw Gateway
+============================================================
+
+Terminal PC 3:
+
+cd "C:\Uni\3º ano\2ºSemestre\AO\TP4\2026-ei-aoopii-a18-clean"
+
+openclaw gateway run
+
+Este terminal deve ficar aberto.
+
+Logs bons:
+[gateway] ready
+[gateway] http server listening
+
+Erro mau:
+Ollama could not be reached at http://127.0.0.1:11434
+
+Se aparecer esse erro:
+- confirmar que o proxy local esta aberto
+- confirmar que /api/generate responde OK
+- reiniciar Gateway depois do proxy estar ativo
+
+============================================================
+10. PC - arrancar Flask Bridge
+============================================================
+
+Terminal PC 4:
+
+cd "C:\Uni\3º ano\2ºSemestre\AO\TP4\2026-ei-aoopii-a18-clean\OpenClaw_Server"
+
+$env:OPENCLAW_TIMEOUT_SECONDS = "180"
+$env:OPENCLAW_TEMPERATURE = "0"
+$env:OPENCLAW_MAX_OUTPUT_TOKENS = "220"
+$env:OPENCLAW_REPAIR_ENABLED = "true"
+$env:OPENCLAW_FALLBACK_ENABLED = "true"
+$env:OPENCLAW_STRICT_SCHEMA = "true"
+
+python app.py
+
+Este terminal deve ficar aberto.
+
+============================================================
+11. PC - testar Flask Bridge
+============================================================
+
+Terminal PC 5:
+
+Invoke-RestMethod http://127.0.0.1:5055/health |
+    ConvertTo-Json -Depth 6
+
+Resultado esperado:
+"status": "ok"
+"gatewayAvailable": true
+"gatewayUrl": "http://127.0.0.1:18789"
+
+============================================================
+12. Unity - configuracao de demo
+============================================================
+
+No OpenClaw Society Autonomy Manager:
+
+Enable Autonomy: desligado inicialmente
+Auto Discover Agents: desligado
+Agent Controllers:
+- Element 0 = NPC_Lia
+- Element 1 = NPC_Afonso
+- Element 2 = NPC_Marta
+- Element 3 = NPC_Duarte
+
+Preserve Manual Agent Order: ligado
+Start Agent Index: 0
+Max Autonomous Agents: 4
+Max Decisions Per Play Session: 4
+Disable Autonomy After Limit: ligado
+Initial Delay Seconds: 10
+Global Cooldown Seconds: 20
+Npc Cooldown Seconds: 30
+Max Decisions Per NPC: 1
+Enable Debug Logs: ligado
+
+Fluxo:
+1. Carregar Play
+2. Esperar a cena iniciar
+3. Ligar Enable Autonomy
+4. Observar Console
+
+============================================================
+13. O que conta como sucesso real
+============================================================
+
+Sucesso real:
+
+Source: openclaw_agent
+Route: openclaw/lia ou openclaw/afonso ou openclaw/marta ou openclaw/duarte
+OpenClaw decision executed successfully
+npc_relationships.json guardado
+npc_memory.json guardado
+
+Fallback seguro:
+
+Source: local_idle_fallback
+Action: Idle
+
+Fallback nao significa que a Unity crashou, mas nao conta como decisao real do OpenClaw para a demo principal.
+
+============================================================
+14. Resultado validado em 2026-06-14
+============================================================
+
+Foi validado com sucesso:
+
+Duarte -> Source: openclaw_agent -> Route: openclaw/duarte -> Target: Lia -> PositiveRelation
+Lia -> Source: openclaw_agent -> Route: openclaw/lia -> Target: Duarte -> PositiveRelation
+Afonso -> Source: openclaw_agent -> Route: openclaw/afonso -> Target: Marta -> PositiveRelation
+Marta -> Source: openclaw_agent -> Route: openclaw/marta -> Target: Duarte -> PositiveRelation
+
+Tambem foi validado:
+- memoria persistente guardada em npc_memory.json
+- relacoes sociais persistentes guardadas em npc_relationships.json
+- 4 decisoes na mesma sessao, serializadas pelo manager
+
+============================================================
+15. Explicacao tecnica para apresentacao
+============================================================
+
+A simulacao tem quatro NPCs autonomos, cada um com identidade, memoria e relacoes proprias.
+O manager nao decide o conteudo da acao. Apenas controla ordem, cooldowns, limites e evita pedidos concorrentes.
+Cada NPC chama o seu agente OpenClaw, recebe uma decisao do LLM e a Unity executa essa decisao.
+A memoria e as relacoes sao persistidas em ficheiros JSON.
+Os pedidos ao LLM sao serializados por estabilidade, para evitar timeouts e sobrecarga do backend.

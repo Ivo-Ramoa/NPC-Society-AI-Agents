@@ -1,0 +1,57 @@
+# Unity
+**/[Ll]ibrary/
+**/[Tt]emp/
+**/[Oo]bj/
+**/[Bb]uild/
+**/[Bb]uilds/
+**/[Ll]ogs/
+**/[Uu]ser[Ss]ettings/
+**/MemoryCaptures/
+**/Recordings/
+
+# Visual Studio / Rider
+.vs/
+.vscode/
+*.csproj
+*.sln
+*.user
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Builds
+*.apk
+*.aab
+*.unitypackage__pycache__/
+*.py[cod]
+/src/NPCSociety3D/Assets/**/*.unitypackage
+
+# Secrets / credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# Third-party Unity assets - intentionally excluded
+/src/NPCSociety3D/Assets/FantasyMedievalTown_LITE*/
+/src/NPCSociety3D/Assets/JC_LP_MedievalCharacters_LITE*/
+/src/NPCSociety3D/Assets/LowPolyFarmLite*/
+/src/NPCSociety3D/Assets/LowPolyFoodLite*/
+/src/NPCSociety3D/Assets/LowPolyMedievalPropsLite*/
+/src/NPCSociety3D/Assets/SimpleNaturePack*/
+/src/NPCSociety3D/Assets/TextMesh Pro*/
+/src/NPCSociety3D/Assets/Animations/Mixamo*/
+/src/NPCSociety3D/Assets/Models/Characteres*/

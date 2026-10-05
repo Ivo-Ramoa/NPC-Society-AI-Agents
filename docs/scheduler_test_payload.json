@@ -1,0 +1,52 @@
+﻿{
+  "eligibleActors": [
+    {
+      "name": "Lia",
+      "role": "Curandeira",
+      "goal": "Ajudar os habitantes da vila",
+      "personality": "Empatica, paciente e prestavel",
+      "mood": 50,
+      "trust": 50,
+      "recentMemories": [
+        "Lia encorajou Duarte recentemente."
+      ]
+    },
+    {
+      "name": "Afonso",
+      "role": "Ferreiro",
+      "goal": "Produzir ferramentas e trocar recursos",
+      "personality": "Trabalhador, direto e competitivo",
+      "mood": 50,
+      "trust": 50,
+      "recentMemories": [
+        "Afonso ajudou Marta com ferramentas."
+      ]
+    },
+    {
+      "name": "Marta",
+      "role": "Agricultora",
+      "goal": "Produzir alimentos e ajudar a sustentar a vila",
+      "personality": "Cooperativa, calma e pratica",
+      "mood": 50,
+      "trust": 50,
+      "recentMemories": [
+        "Marta recebeu apoio de Afonso."
+      ]
+    },
+    {
+      "name": "Duarte",
+      "role": "Guarda",
+      "goal": "Proteger a vila e evitar conflitos",
+      "personality": "Serio, protetor e desconfiado",
+      "mood": 50,
+      "trust": 50,
+      "recentMemories": [
+        "Duarte recebeu reconhecimento de Lia."
+      ]
+    }
+  ],
+  "society": {
+    "relationships": [],
+    "recentSocialEvents": []
+  }
+}
